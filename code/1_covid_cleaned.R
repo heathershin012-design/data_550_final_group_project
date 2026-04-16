@@ -1,6 +1,5 @@
 # ==========================================
 # DATA CLEANING FOR GROUP PROJECT
-# Hyelim's role: missing data, recoding, derived variables
 # ==========================================
 
 library(here)
@@ -9,6 +8,8 @@ library(dplyr)
 # ==========================================
 # 1. LOAD DATA
 # ==========================================
+here::i_am("code/1_covid_cleaned.R")
+
 absolute_path_to_data <- here::here("data", "covid_sub.csv")
 covid <- read.csv(absolute_path_to_data, header = TRUE)
 
@@ -20,12 +21,12 @@ summary(covid)
 # ==========================================
 # 2. REMOVE EXTRA INDEX COLUMN
 # ==========================================
-# This column came from exporting the file and is not needed for analysis
+covid <- covid %>% select(-X)
 
 # ==========================================
 # 3. CHECK MISSING VALUES
 # ==========================================
-colSums(is.na(covid))
+print(colSums(is.na(covid)))
 
 # ==========================================
 # 4. STANDARDIZE TEXT VARIABLES
@@ -37,11 +38,11 @@ covid <- covid %>%
   )
 
 # ==========================================
-# 5. RECODE DEMOGRAPHIC VARIABLES
+# 5. RECODE SEX into Female/Male
 # ==========================================
 covid <- covid %>%
   mutate(
-    sex = case_when(
+    SEX = case_when(
       SEX == "female" ~ "Female",
       SEX == "male"   ~ "Male",
       TRUE            ~ NA_character_
@@ -51,45 +52,45 @@ covid <- covid %>%
 # ==========================================
 # 6. RECODE YES/NO VARIABLES TO 0/1
 # ==========================================
+# 1 = Yes, 0 = No
+yes_no_cols <- c("USMER", "INTUBED", "PNEUMONIA", "PREGNANT",
+                 "DIABETES", "COPD", "ASTHMA", "INMSUPR",
+                 "HIPERTENSION", "OTHER_DISEASE", "CARDIOVASCULAR",
+                 "OBESITY", "RENAL_CHRONIC", "TOBACCO", "ICU")
+
 covid <- covid %>%
-  mutate(
-    usmer_bin          = ifelse(USMER == "yes", 1, ifelse(USMER == "no", 0, NA)),
-    intubed_bin        = ifelse(INTUBED == "yes", 1, ifelse(INTUBED == "no", 0, NA)),
-    pneumonia_bin      = ifelse(PNEUMONIA == "yes", 1, ifelse(PNEUMONIA == "no", 0, NA)),
-    pregnant_bin       = ifelse(PREGNANT == "yes", 1, ifelse(PREGNANT == "no", 0, NA)),
-    diabetes_bin       = ifelse(DIABETES == "yes", 1, ifelse(DIABETES == "no", 0, NA)),
-    copd_bin           = ifelse(COPD == "yes", 1, ifelse(COPD == "no", 0, NA)),
-    asthma_bin         = ifelse(ASTHMA == "yes", 1, ifelse(ASTHMA == "no", 0, NA)),
-    inmsupr_bin        = ifelse(INMSUPR == "yes", 1, ifelse(INMSUPR == "no", 0, NA)),
-    hypertension_bin   = ifelse(HIPERTENSION == "yes", 1, ifelse(HIPERTENSION == "no", 0, NA)),
-    other_disease_bin  = ifelse(OTHER_DISEASE == "yes", 1, ifelse(OTHER_DISEASE == "no", 0, NA)),
-    cardiovascular_bin = ifelse(CARDIOVASCULAR == "yes", 1, ifelse(CARDIOVASCULAR == "no", 0, NA)),
-    obesity_bin        = ifelse(OBESITY == "yes", 1, ifelse(OBESITY == "no", 0, NA)),
-    renal_bin          = ifelse(RENAL_CHRONIC == "yes", 1, ifelse(RENAL_CHRONIC == "no", 0, NA)),
-    tobacco_bin        = ifelse(TOBACCO == "yes", 1, ifelse(TOBACCO == "no", 0, NA)),
-    icu_bin            = ifelse(ICU == "yes", 1, ifelse(ICU == "no", 0, NA))
-  )
+  mutate(across(all_of(yes_no_cols), ~ case_when(
+    tolower(.) == "yes" ~ 1,
+    tolower(.) == "no"  ~ 0,
+    TRUE                ~ NA_real_
+  )))
 
 # ==========================================
 # 7. CREATE BINARY OUTCOME VARIABLES
 # ==========================================
+
+# Hospitalization: 1 = hospitalized, 0 = returned home
 covid <- covid %>%
   mutate(
     hosp_bin = ifelse(PATIENT_TYPE == "hospitalization", 1,
                       ifelse(PATIENT_TYPE == "returned home", 0, NA))
   )
 
+# Death: 1 = died, 0 = survived
+# DATE_DIED is missing when patient did NOT die — keep as 0
 covid <- covid %>%
   mutate(
     death_bin = ifelse(is.na(DATE_DIED) | DATE_DIED == "", 0, 1)
   )
 
+# COVID positive: 1-3 = positive, 4-7 = not positive
 covid <- covid %>%
   mutate(
     covid_positive_bin = ifelse(CLASIFFICATION_FINAL %in% c(1, 2, 3), 1,
                                 ifelse(CLASIFFICATION_FINAL %in% c(4, 5, 6, 7), 0, NA))
   )
 
+# Severe outcome: hospitalized OR died
 covid <- covid %>%
   mutate(
     severe_outcome = ifelse(hosp_bin == 1 | death_bin == 1, 1,
@@ -97,16 +98,46 @@ covid <- covid %>%
   )
 
 # ==========================================
-# 8. QUALITY CHECKS
+# 8. REMOVE MISSING VALUES (SELECTIVE)
 # ==========================================
-table(covid$sex, useNA = "ifany")
-table(covid$diabetes_bin, useNA = "ifany")
-table(covid$hosp_bin, useNA = "ifany")
-table(covid$death_bin, useNA = "ifany")
-table(covid$severe_outcome, useNA = "ifany")
-table(covid$covid_positive_bin, useNA = "ifany")
+# NOTE: We do NOT remove NAs from DATE_DIED, INTUBED, ICU, PREGNANT
+# because missing in those columns is meaningful (not applicable)
+# We only remove NAs from columns where missing = truly unknown
+
+covid <- covid %>%
+  filter(!is.na(AGE),
+         !is.na(PNEUMONIA),
+         !is.na(DIABETES),
+         !is.na(COPD),
+         !is.na(ASTHMA),
+         !is.na(INMSUPR),
+         !is.na(HIPERTENSION),
+         !is.na(OTHER_DISEASE),
+         !is.na(CARDIOVASCULAR),
+         !is.na(OBESITY),
+         !is.na(RENAL_CHRONIC),
+         !is.na(TOBACCO),
+         !is.na(SEX),
+         !is.na(hosp_bin),
+         !is.na(covid_positive_bin),
+         !is.na(severe_outcome))
 
 # ==========================================
-# 9. EXPORT CLEANED DATA
+# 9. QUALITY CHECKS
+# ==========================================
+cat("Rows after cleaning:", nrow(covid), "\n")
+
+print(table(covid$SEX, useNA = "ifany"))
+print(table(covid$USMER, useNA = "ifany"))
+print(table(covid$DIABETES, useNA = "ifany"))
+print(table(covid$hosp_bin, useNA = "ifany"))
+print(table(covid$death_bin, useNA = "ifany"))
+print(table(covid$severe_outcome, useNA = "ifany"))
+print(table(covid$covid_positive_bin, useNA = "ifany"))
+
+# ==========================================
+# 10. EXPORT CLEANED DATA
 # ==========================================
 saveRDS(covid, file = here::here("output", "covid_cleaned.rds"))
+
+cat("Done! Cleaned data saved to output/covid_cleaned.rds\n")
