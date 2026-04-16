@@ -2,11 +2,17 @@
 # DATA CLEANING FOR GROUP PROJECT
 # Hyelim's role: missing data, recoding, derived variables
 # ==========================================
+library(here)
 
-getwd()
-list.files()
-list.files("~/Desktop")
-covid <- read.csv("~/Desktop/covid_sub.csv")
+setwd("/Users/hyelimshin/Desktop/data550_project/data_550_final_group_project")
+
+here::i_am("code/1_covid_cleaned.R")
+
+absolute_path_to_data <- here("data", "covid_sub.csv")
+
+covid <- read.csv(absolute_path_to_data, header = TRUE)
+
+
 
 
 library(dplyr)
@@ -14,7 +20,6 @@ library(dplyr)
 # ==========================================
 # 1. LOAD DATA
 # ==========================================
-covid <- read.csv("covid_sub.csv")
 
 # Check structure
 names(covid)
