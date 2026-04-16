@@ -12,10 +12,11 @@ absolute_path_to_data <- here("data", "covid_sub.csv")
 
 covid <- read.csv(absolute_path_to_data, header = TRUE)
 
-
+saveRDS(covid, file = here::here("output", "covid_cleaned.rds"))
 
 
 library(dplyr)
+
 
 # ==========================================
 # 1. LOAD DATA
